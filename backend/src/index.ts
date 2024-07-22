@@ -1,14 +1,17 @@
-var path = require("path");
-var express = require("express");
-var app = express();
-var http = require("http").Server(app);
+import path from "path";
+import express from "express";
+import http from "http";
+// @ts-ignore
+import { JIFFServer, JIFFServerBigNumber } from "jiff-mpc";
+
+const app = express();
+const server = http.createServer(app);
 
 app.use("/", express.static(path.join(__dirname)));
 
-const { JIFFServer, JIFFServerBigNumber } = require("jiff-mpc");
-const jiffServer = new JIFFServer(http, { logs: true });
+const jiffServer = new JIFFServer(server, { logs: true });
 jiffServer.apply_extension(JIFFServerBigNumber);
 
-http.listen(8080, function () {
+server.listen(8080, () => {
   console.log("listening on *:8080");
 });

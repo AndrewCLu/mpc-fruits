@@ -12,7 +12,9 @@ const JiffClientComponent: React.FC = () => {
 
   const connect = () => {
     const client = new JIFFClient(
-      "https://jiff-test.onrender.com:8080",
+      process.env.NODE_ENV === "development"
+        ? "http://localhost:8080"
+        : "https://jiff-test.onrender.com:8080",
       computationId,
       {
         autoConnect: false,
