@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 // @ts-ignore
-const { JIFFClient, JIFFClientBigNumber } = require("jiff-mpc");
+import { JIFFClient, JIFFClientBigNumber } from "jiff-mpc";
 
 const JiffClientComponent: React.FC = () => {
   const [jiffClient, setJiffClient] = useState<typeof JIFFClient | null>(null);
