@@ -1,12 +1,14 @@
-import express from "express";
+var path = require("path");
+var express = require("express");
+var app = express();
+var http = require("http").Server(app);
 
-const app = express();
-const PORT = process.env.PORT || 4000;
+app.use("/", express.static(path.join(__dirname)));
 
-app.get("/", (req, res) => {
-  res.send("Hello, TypeScript with Express!");
-});
+const { JIFFServer, JIFFServerBigNumber } = require("jiff-mpc");
+const jiffServer = new JIFFServer(http, { logs: true });
+jiffServer.apply_extension(JIFFServerBigNumber);
 
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+http.listen(8080, function () {
+  console.log("listening on *:8080");
 });
