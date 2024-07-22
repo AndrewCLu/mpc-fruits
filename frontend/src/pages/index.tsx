@@ -11,19 +11,23 @@ const JiffClientComponent: React.FC = () => {
   const [buttonDisabled, setButtonDisabled] = useState<boolean>(true);
 
   const connect = () => {
-    const client = new JIFFClient("http://localhost:8080", computationId, {
-      autoConnect: false,
-      party_count: partyCount,
-      crypto_provider: true,
-      // @ts-ignore
-      onError: (_, error) => {
-        setOutput((prev) => [...prev, `<p class='error'>${error}</p>`]);
-      },
-      onConnect: () => {
-        setButtonDisabled(false);
-        setOutput((prev) => [...prev, "<p>All parties Connected!</p>"]);
-      },
-    });
+    const client = new JIFFClient(
+      "https://jiff-test.onrender.com:8080",
+      computationId,
+      {
+        autoConnect: false,
+        party_count: partyCount,
+        crypto_provider: true,
+        // @ts-ignore
+        onError: (_, error) => {
+          setOutput((prev) => [...prev, `<p class='error'>${error}</p>`]);
+        },
+        onConnect: () => {
+          setButtonDisabled(false);
+          setOutput((prev) => [...prev, "<p>All parties Connected!</p>"]);
+        },
+      }
+    );
 
     client.apply_extension(JIFFClientBigNumber, {});
     client.connect();
