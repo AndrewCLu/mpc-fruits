@@ -11,7 +11,6 @@ const JiffClientComponent: React.FC = () => {
   const [buttonDisabled, setButtonDisabled] = useState<boolean>(true);
 
   const connect = () => {
-    console.log("Connecting...", process.env.NODE_ENV);
     const client = new JIFFClient(
       process.env.NODE_ENV === "development"
         ? "http://localhost:8080"
