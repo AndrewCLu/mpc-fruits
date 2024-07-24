@@ -11,6 +11,7 @@ enum OutputState {
   AWAITING_OTHER_PARTIES_INPUTS,
   COMPUTING,
   SHOW_RESULTS,
+  ERROR,
 }
 
 const fruits = [
@@ -34,9 +35,14 @@ const JiffClientComponent: React.FC = () => {
     Array(fruits.length).fill(0)
   );
   const [output, setOutput] = useState<OutputState>(OutputState.NOT_CONNECTED);
-  const [results, setResults] = useState<(typeof BigNumber)[]>([]);
+  const [results, setResults] = useState<BigNumber[]>([]);
 
   const connect = () => {
+    if (!computationId || partyCount < 2) {
+      toast.error("Please enter a valid computation ID and party count.");
+      return;
+    }
+
     const client = new JIFFClient(
       process.env.NODE_ENV === "development"
         ? "http://localhost:8080"
@@ -49,6 +55,13 @@ const JiffClientComponent: React.FC = () => {
         // @ts-ignore
         onError: (_, error) => {
           console.error(error);
+          if (
+            error.includes("Maximum parties capacity reached") ||
+            error.includes("contradicting party count")
+          ) {
+            toast.error("Computation is full. Try another computation ID.");
+          }
+          setOutput(OutputState.ERROR);
         },
         onConnect: () => {
           console.log("Connected to server");
@@ -75,6 +88,7 @@ const JiffClientComponent: React.FC = () => {
       console.log(`Beginning MPC with ratings ${ratings}`);
       let shares = await jiffClient.share_array(ratings);
       setOutput(OutputState.COMPUTING);
+      const startTime = Date.now();
       console.log("Shares: ", shares);
       let sumShares = shares[1];
       console.log("Starting Sum Shares: ", sumShares);
@@ -86,10 +100,10 @@ const JiffClientComponent: React.FC = () => {
       }
       console.log("Added Sum Shares: ", sumShares);
 
-      for (let k = 0; k < sumShares.length; k++) {
-        sumShares[k] = sumShares[k].cdiv(jiffClient.party_count);
-      }
-      console.log("Averaged Sum Shares: ", sumShares);
+      // for (let k = 0; k < sumShares.length; k++) {
+      //   sumShares[k] = sumShares[k].cdiv(jiffClient.party_count);
+      // }
+      // console.log("Averaged Sum Shares: ", sumShares);
 
       const results = await Promise.all(
         sumShares.map((share: any) => jiffClient.open(share))
@@ -97,6 +111,7 @@ const JiffClientComponent: React.FC = () => {
       console.log("Results:", results);
       setResults(results);
       setOutput(OutputState.SHOW_RESULTS);
+      toast.success(`MPC runtime: ${Date.now() - startTime}ms`);
     }
   };
 
@@ -113,7 +128,9 @@ const JiffClientComponent: React.FC = () => {
       case OutputState.COMPUTING:
         return "Computing...";
       case OutputState.SHOW_RESULTS:
-        return "Show Results";
+        return "Join another fruit rating party";
+      case OutputState.ERROR:
+        return "Error - please try again";
     }
   };
 
@@ -137,7 +154,11 @@ const JiffClientComponent: React.FC = () => {
         />
         <button
           onClick={connect}
-          disabled={output !== OutputState.NOT_CONNECTED}
+          disabled={
+            output !== OutputState.NOT_CONNECTED &&
+            output !== OutputState.SHOW_RESULTS &&
+            output !== OutputState.ERROR
+          }
           className="w-full bg-purple-600 text-white p-2 rounded-md mb-4 hover:bg-purple-700 disabled:opacity-50"
         >
           {getButtonDisplay()}
@@ -170,13 +191,16 @@ const JiffClientComponent: React.FC = () => {
         )}
         {output === OutputState.SHOW_RESULTS && (
           <div className="mt-4 text-black">
-            <p>Results have been computed:</p>
+            <p>The fruits have been rated by the crowd.</p>
             <ul>
-              {fruits.map((fruit, index) => (
-                <li key={index}>
-                  {fruit}: {results[index].toString()}
-                </li>
-              ))}
+              {fruits
+                .map((fruit, index) => ({ fruit, rating: results[index] }))
+                .sort((a, b) => b.rating.toNumber() - a.rating.toNumber())
+                .map(({ fruit, rating }, index) => (
+                  <li key={index}>
+                    {fruit}: {(rating.toNumber() / partyCount).toFixed(1)}
+                  </li>
+                ))}
             </ul>
           </div>
         )}
