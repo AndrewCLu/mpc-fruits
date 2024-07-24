@@ -271,9 +271,9 @@ const JiffClientComponent: React.FC = () => {
                 .sort((a, b) => b.rating - a.rating)
                 .map(({ fruit, rating }, index) => (
                   <li key={index}>
-                    {`${fruit}: ${(rating / partyCount).toFixed(
-                      1
-                    )} (std: ${stdResults[index].toFixed(2)})`}
+                    {`${fruit}: ${rating.toFixed(1)} (std: ${stdResults[
+                      index
+                    ].toFixed(2)})`}
                   </li>
                 ))}
             </ul>
