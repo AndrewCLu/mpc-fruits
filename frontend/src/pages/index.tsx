@@ -1,9 +1,12 @@
 import React, { useState } from "react";
-// @ts-ignore
-import { JIFFClient, JIFFClientBigNumber } from "jiff-mpc";
+/* @ts-ignore */
+import {
+  JIFFClient,
+  JIFFClientBigNumber,
+  /* @ts-ignore */
+} from "jiff-mpc";
 import { toast } from "sonner";
 import { BigNumber } from "bignumber.js";
-import Box from "@mui/material/Box";
 import Rating from "@mui/material/Rating";
 
 enum OutputState {
@@ -37,7 +40,8 @@ const JiffClientComponent: React.FC = () => {
     Array(fruits.length).fill(0)
   );
   const [output, setOutput] = useState<OutputState>(OutputState.NOT_CONNECTED);
-  const [results, setResults] = useState<BigNumber[]>([]);
+  const [avgResults, setAvgResults] = useState<number[]>([]);
+  const [stdResults, setStdResults] = useState<number[]>([]);
 
   const connect = () => {
     if (!computationId || partyCount < 2) {
@@ -89,31 +93,97 @@ const JiffClientComponent: React.FC = () => {
     if (jiffClient) {
       console.log(`Beginning MPC with ratings ${ratings}`);
       let shares = await jiffClient.share_array(ratings);
-      setOutput(OutputState.COMPUTING);
-      const startTime = Date.now();
       console.log("Shares: ", shares);
-      let sumShares = shares[1];
-      console.log("Starting Sum Shares: ", sumShares);
+      setOutput(OutputState.COMPUTING);
 
-      for (let i = 2; i <= jiffClient.party_count; i++) {
-        for (let j = 0; j < sumShares.length; j++) {
-          sumShares[j] = sumShares[j].sadd(shares[i][j]);
+      // Start average computation
+      const startAverageTime = Date.now();
+
+      let sumShares: any[] = [];
+      for (let i = 1; i <= jiffClient.party_count; i++) {
+        for (let j = 0; j < fruits.length; j++) {
+          if (i === 1) {
+            sumShares.push(shares[i][j]);
+          } else {
+            sumShares[j] = sumShares[j].sadd(shares[i][j]);
+          }
         }
       }
-      console.log("Added Sum Shares: ", sumShares);
 
       // for (let k = 0; k < sumShares.length; k++) {
       //   sumShares[k] = sumShares[k].cdiv(jiffClient.party_count);
       // }
       // console.log("Averaged Sum Shares: ", sumShares);
 
-      const results = await Promise.all(
+      const sumResults = await Promise.all(
         sumShares.map((share: any) => jiffClient.open(share))
       );
-      console.log("Results:", results);
-      setResults(results);
+      console.log("Sum Results: ", sumResults);
+      const averageResults = sumResults.map(
+        (result: BigNumber) => result.toNumber() / jiffClient.party_count
+      );
+      console.log("Average Results: ", averageResults);
+
+      const averageTime = Date.now() - startAverageTime;
+      console.log("Average Time: ", averageTime);
+
+      // Start standard deviation computation
+      const startStdTime = Date.now();
+
+      let squaredSumShares: any[] = [];
+      for (let i = 0; i < sumShares.length; i++) {
+        squaredSumShares.push(sumShares[i].smult(sumShares[i]));
+      }
+
+      let sumOfSquaresShares: any[] = [];
+      for (let i = 1; i <= jiffClient.party_count; i++) {
+        for (let j = 0; j < sumShares.length; j++) {
+          if (j === 0) {
+            const x = await jiffClient.open(shares[i][j]);
+            console.log("x", i, x.toNumber());
+          }
+          const shareSquared = shares[i][j].smult(shares[i][j]);
+          if (i === 1) {
+            sumOfSquaresShares.push(shareSquared);
+          } else {
+            sumOfSquaresShares[j] = sumOfSquaresShares[j].sadd(shareSquared);
+          }
+        }
+      }
+      for (let k = 0; k < sumOfSquaresShares.length; k++) {
+        sumOfSquaresShares[k] = sumOfSquaresShares[k].cmult(
+          jiffClient.party_count
+        );
+      }
+
+      let stdResultShares: any[] = [];
+      for (let i = 0; i < sumShares.length; i++) {
+        const squaredSum = squaredSumShares[i];
+        const sumOfSquares = sumOfSquaresShares[i];
+        const stdResult = sumOfSquares.ssub(squaredSum);
+        stdResultShares.push(stdResult);
+      }
+
+      const rawStdResults = await Promise.all(
+        stdResultShares.map((diff: any) => jiffClient.open(diff))
+      );
+      const stdResults = rawStdResults.map((result: BigNumber) =>
+        Math.sqrt(
+          result.toNumber() /
+            (jiffClient.party_count * (jiffClient.party_count - 1))
+        )
+      );
+      console.log("Std Results:", stdResults);
+
+      const stdTime = Date.now() - startStdTime;
+      console.log("Std Time: ", stdTime);
+
+      setAvgResults(averageResults);
+      setStdResults(stdResults);
       setOutput(OutputState.SHOW_RESULTS);
-      toast.success(`MPC runtime: ${Date.now() - startTime}ms`);
+      toast.success(
+        `MPC runtime: ${averageTime}ms for average, ${stdTime}ms for standard deviation`
+      );
     }
   };
 
@@ -197,11 +267,13 @@ const JiffClientComponent: React.FC = () => {
             </p>
             <ul>
               {fruits
-                .map((fruit, index) => ({ fruit, rating: results[index] }))
-                .sort((a, b) => b.rating.toNumber() - a.rating.toNumber())
+                .map((fruit, index) => ({ fruit, rating: avgResults[index] }))
+                .sort((a, b) => b.rating - a.rating)
                 .map(({ fruit, rating }, index) => (
                   <li key={index}>
-                    {fruit}: {(rating.toNumber() / partyCount).toFixed(1)}
+                    {`${fruit}: ${(rating / partyCount).toFixed(
+                      1
+                    )} (std: ${stdResults[index].toFixed(2)})`}
                   </li>
                 ))}
             </ul>
