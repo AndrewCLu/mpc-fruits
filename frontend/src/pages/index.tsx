@@ -3,6 +3,8 @@ import React, { useState } from "react";
 import { JIFFClient, JIFFClientBigNumber } from "jiff-mpc";
 import { toast } from "sonner";
 import { BigNumber } from "bignumber.js";
+import Box from "@mui/material/Box";
+import Rating from "@mui/material/Rating";
 
 enum OutputState {
   NOT_CONNECTED,
@@ -168,16 +170,15 @@ const JiffClientComponent: React.FC = () => {
             {fruits.map((fruit, index) => (
               <div key={index} className="mb-4">
                 <label className="block text-black mb-2">{fruit}</label>
-                <input
-                  type="number"
+                <Rating
+                  name={`rating-${index}`}
                   value={ratings[index]}
-                  onChange={(e) => {
+                  onChange={(event, newValue) => {
                     const newRatings = [...ratings];
-                    newRatings[index] = parseInt(e.target.value);
+                    newRatings[index] = newValue || 0;
                     setRatings(newRatings);
                   }}
-                  placeholder="Rating (1-5)"
-                  className="w-full text-black p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-purple-600"
+                  max={5}
                 />
               </div>
             ))}
@@ -191,7 +192,9 @@ const JiffClientComponent: React.FC = () => {
         )}
         {output === OutputState.SHOW_RESULTS && (
           <div className="mt-4 text-black">
-            <p>The fruits have been rated by the crowd.</p>
+            <p className="mb-4 font-bold">
+              The fruits have been rated by the crowd.
+            </p>
             <ul>
               {fruits
                 .map((fruit, index) => ({ fruit, rating: results[index] }))
