@@ -1,14 +1,40 @@
 import React, { useState } from "react";
 // @ts-ignore
 import { JIFFClient, JIFFClientBigNumber } from "jiff-mpc";
+import { toast } from "sonner";
+import { BigNumber } from "bignumber.js";
+
+enum OutputState {
+  NOT_CONNECTED,
+  AWAITING_OTHER_PARTIES_CONNECTION,
+  CONNECTED,
+  AWAITING_OTHER_PARTIES_INPUTS,
+  COMPUTING,
+  SHOW_RESULTS,
+}
+
+const fruits = [
+  "Apple",
+  "Banana",
+  "Cherry",
+  "Date",
+  "Elderberry",
+  "Fig",
+  "Grape",
+  "Honeydew",
+  "Kiwi",
+  "Lemon",
+];
 
 const JiffClientComponent: React.FC = () => {
   const [jiffClient, setJiffClient] = useState<typeof JIFFClient | null>(null);
   const [computationId, setComputationId] = useState<string>("");
   const [partyCount, setPartyCount] = useState<number>(0);
-  const [number, setNumber] = useState<number | null>(null);
-  const [output, setOutput] = useState<string[]>([]);
-  const [buttonDisabled, setButtonDisabled] = useState<boolean>(true);
+  const [ratings, setRatings] = useState<number[]>(
+    Array(fruits.length).fill(0)
+  );
+  const [output, setOutput] = useState<OutputState>(OutputState.NOT_CONNECTED);
+  const [results, setResults] = useState<(typeof BigNumber)[]>([]);
 
   const connect = () => {
     const client = new JIFFClient(
@@ -22,54 +48,78 @@ const JiffClientComponent: React.FC = () => {
         crypto_provider: true,
         // @ts-ignore
         onError: (_, error) => {
-          setOutput((prev) => [...prev, `<p class='error'>${error}</p>`]);
+          console.error(error);
         },
         onConnect: () => {
-          setButtonDisabled(false);
-          setOutput((prev) => [...prev, "<p>All parties Connected!</p>"]);
+          console.log("Connected to server");
+          setOutput(OutputState.CONNECTED);
         },
       }
     );
 
     client.apply_extension(JIFFClientBigNumber, {});
     client.connect();
+    setOutput(OutputState.AWAITING_OTHER_PARTIES_CONNECTION);
     setJiffClient(client);
   };
 
   const submit = async () => {
-    if (number === null || isNaN(number)) {
-      setOutput((prev) => [
-        ...prev,
-        "<p class='error'>Input a valid number!</p>",
-      ]);
-      return;
-    } else if (number > 100 || number < 0 || number !== Math.floor(number)) {
-      setOutput((prev) => [
-        ...prev,
-        "<p class='error'>Input a WHOLE number between 0 and 100!</p>",
-      ]);
+    if (ratings.some((rating) => rating < 1 || rating > 5)) {
+      toast.error("All ratings must be between 1 and 5.");
       return;
     }
 
-    setButtonDisabled(true);
-    setOutput((prev) => [...prev, "<p>Starting...</p>"]);
+    setOutput(OutputState.AWAITING_OTHER_PARTIES_INPUTS);
 
     if (jiffClient) {
-      let shares = jiffClient.share(number);
-      let sum = shares[1];
+      console.log(`Beginning MPC with ratings ${ratings}`);
+      let shares = await jiffClient.share_array(ratings);
+      setOutput(OutputState.COMPUTING);
+      console.log("Shares: ", shares);
+      let sumShares = shares[1];
+      console.log("Starting Sum Shares: ", sumShares);
 
       for (let i = 2; i <= jiffClient.party_count; i++) {
-        sum = sum.sadd(shares[i]);
+        for (let j = 0; j < sumShares.length; j++) {
+          sumShares[j] = sumShares[j].sadd(shares[i][j]);
+        }
       }
+      console.log("Added Sum Shares: ", sumShares);
 
-      const result = await jiffClient.open(sum);
-      setOutput((prev) => [...prev, `<p>Result is: ${result.toString()}</p>`]);
-      setButtonDisabled(false);
+      for (let k = 0; k < sumShares.length; k++) {
+        sumShares[k] = sumShares[k].cdiv(jiffClient.party_count);
+      }
+      console.log("Averaged Sum Shares: ", sumShares);
+
+      const results = await Promise.all(
+        sumShares.map((share: any) => jiffClient.open(share))
+      );
+      console.log("Results:", results);
+      setResults(results);
+      setOutput(OutputState.SHOW_RESULTS);
+    }
+  };
+
+  const getButtonDisplay = () => {
+    switch (output) {
+      case OutputState.NOT_CONNECTED:
+        return "Connect";
+      case OutputState.AWAITING_OTHER_PARTIES_CONNECTION:
+        return "Awaiting other parties connection";
+      case OutputState.CONNECTED:
+        return "Submit ratings to proceed";
+      case OutputState.AWAITING_OTHER_PARTIES_INPUTS:
+        return "Awaiting other parties inputs";
+      case OutputState.COMPUTING:
+        return "Computing...";
+      case OutputState.SHOW_RESULTS:
+        return "Show Results";
     }
   };
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-white dark:bg-gray-800 p-4">
+      <h1 className="text-6xl text-purple-500 mb-10">Fruits</h1>
       <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-lg shadow-md p-6">
         <input
           type="text"
@@ -87,29 +137,49 @@ const JiffClientComponent: React.FC = () => {
         />
         <button
           onClick={connect}
+          disabled={output !== OutputState.NOT_CONNECTED}
           className="w-full bg-purple-600 text-white p-2 rounded-md mb-4 hover:bg-purple-700 disabled:opacity-50"
         >
-          Connect
+          {getButtonDisplay()}
         </button>
-        <input
-          type="number"
-          value={number ?? ""}
-          onChange={(e) => setNumber(parseInt(e.target.value))}
-          placeholder="Number"
-          className="w-full text-black p-2 mb-4 border rounded-md focus:outline-none focus:ring-2 focus:ring-purple-600"
-        />
-        <button
-          onClick={submit}
-          disabled={buttonDisabled}
-          className="w-full bg-purple-600 text-white p-2 rounded-md hover:bg-purple-700 disabled:opacity-50"
-        >
-          Submit
-        </button>
-        <div id="output" className="mt-4">
-          {output.map((line, index) => (
-            <p key={index} dangerouslySetInnerHTML={{ __html: line }}></p>
-          ))}
-        </div>
+        {output === OutputState.CONNECTED && (
+          <div>
+            {fruits.map((fruit, index) => (
+              <div key={index} className="mb-4">
+                <label className="block text-black mb-2">{fruit}</label>
+                <input
+                  type="number"
+                  value={ratings[index]}
+                  onChange={(e) => {
+                    const newRatings = [...ratings];
+                    newRatings[index] = parseInt(e.target.value);
+                    setRatings(newRatings);
+                  }}
+                  placeholder="Rating (1-5)"
+                  className="w-full text-black p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-purple-600"
+                />
+              </div>
+            ))}
+            <button
+              onClick={submit}
+              className="w-full bg-purple-600 text-white p-2 rounded-md hover:bg-purple-700 disabled:opacity-50"
+            >
+              Submit
+            </button>
+          </div>
+        )}
+        {output === OutputState.SHOW_RESULTS && (
+          <div className="mt-4 text-black">
+            <p>Results have been computed:</p>
+            <ul>
+              {fruits.map((fruit, index) => (
+                <li key={index}>
+                  {fruit}: {results[index].toString()}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </div>
   );
