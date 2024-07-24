@@ -138,10 +138,6 @@ const JiffClientComponent: React.FC = () => {
       let sumOfSquaresShares: any[] = [];
       for (let i = 1; i <= jiffClient.party_count; i++) {
         for (let j = 0; j < sumShares.length; j++) {
-          if (j === 0) {
-            const x = await jiffClient.open(shares[i][j]);
-            console.log("x", i, x.toNumber());
-          }
           const shareSquared = shares[i][j].smult(shares[i][j]);
           if (i === 1) {
             sumOfSquaresShares.push(shareSquared);
@@ -272,7 +268,7 @@ const JiffClientComponent: React.FC = () => {
                 .map(({ fruit, rating }, index) => (
                   <li key={index}>
                     {`${fruit}: ${rating.toFixed(1)} (std: ${stdResults[
-                      index
+                      fruits.indexOf(fruit)
                     ].toFixed(2)})`}
                   </li>
                 ))}
